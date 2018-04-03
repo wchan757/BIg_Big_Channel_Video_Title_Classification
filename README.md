@@ -3,7 +3,7 @@
 ## File's structure
 1. Code > full_model ------------------- the code for the model building with two embedding layer approach
 2. Code > Word_Embedding > ------------- the code for different apporach of word embedding
-3. big_big_cat --------------------------the csv file for the dataset of big big channel video title and its category 
+3. big_big_category_c.csv --------------------------the csv file for the dataset of big big channel video title and its category 
 
 ## Overview
 This is a NLP Text Classification task. I use the video's title of TVB Big Big Channel to predict the video's cateegory through Convolution Neural Network.
