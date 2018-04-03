@@ -1,0 +1,45 @@
+## self-training
+
+MAX_NB_WORDS = 200000
+MAX_SEQUENCE_LENGTH = 142
+EMBEDDING_DIM = 300
+
+def raw_to_clean(df_):
+    seg_list = ''
+    vocabulary = []
+    stop_ch = set(stopwords.words('chinese'))
+    stop_en = set(stopwords.words('english'))
+   
+    sentence = jieba.lcut(df_, cut_all= True)
+    sentence =  list(filter(None, sentence))
+    for _ in sentence: 
+        if _.isalpha() == True:
+            pass
+        else:
+            continue
+            
+        if _ in stop_ch or _ in stop_en:
+            continue
+        else:
+            vocabulary.append(_)
+    
+    return ' '.join(vocabulary)
+
+
+
+x = df['sp_content']
+y = df['sc_name_hk']
+
+encoder = LabelEncoder()
+encoder.fit(y)
+encoded_Y = encoder.transform(y)
+
+x = x.apply(raw_to_clean)
+all_text = x.drop_duplicates(keep=False)
+tokenizer = Tokenizer(num_words = MAX_NB_WORDS)
+tokenizer.fit_on_texts(all_text)
+encoded_docs = tokenizer.texts_to_sequences(x)
+
+
+x = pad_sequences(encoded_docs, maxlen=MAX_SEQUENCE_LENGTH)
+y = np_utils.to_categorical(encoded_Y)
