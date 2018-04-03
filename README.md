@@ -1,4 +1,6 @@
-## TVB big big channel's video title classification : File's structure
+# TVB big big channel's video title classification 
+
+## File's structure
 1. Code > full_model ------------------- the code for the model building with two embedding layer approach
 2. Code > Word_Embedding > ------------- the code for different apporach of word embedding
 3. big_big_cat --------------------------the csv file for the dataset of big big channel video title and its category 
