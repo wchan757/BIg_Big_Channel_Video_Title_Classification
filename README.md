@@ -6,7 +6,7 @@
 3. big_big_category_c.csv --------------------------the csv file for the dataset of big big channel video title and its category 
 
 ## Overview
-This is a NLP Text Classification task. I use the video's title of TVB Big Big Channel to predict the video's cateegory through Convolution Neural Network.
+This is a NLP Text Classification task. I use the video's title of TVB Big Big Channel to predict the video's category through Convolution Neural Network.
 ## Detail
 ### 1. Web Scraping
 I used the Chrome extension "Web Scraper" to collect the data of video's title and its category in https://www.bigbigchannel.com.hk/tc/cat_bigbigtreasure. I have updaload the dataset with name of big_big_cat
