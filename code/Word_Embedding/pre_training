@@ -1,0 +1,90 @@
+### pre_training
+
+embeddings_index = {}
+
+
+f = codecs.open('Desktop/wiki.zh_yue.vec', encoding='utf-8')
+for line in tqdm(f):
+    values = line.rstrip().rsplit(' ')
+    word = values[0]
+    coefs = np.asarray(values[1:], dtype='float32')
+    embeddings_index[word] = coefs
+
+f.close()
+
+MAX_NB_WORDS = 200000
+MAX_SEQUENCE_LENGTH = 142
+EMBEDDING_DIM = 300
+
+def raw_to_clean(df_):
+    seg_list = ''
+    vocabulary = []
+    stop_ch = set(stopwords.words('chinese'))
+    stop_en = set(stopwords.words('english'))
+   
+    sentence = jieba.lcut(df_, cut_all= True)
+    sentence =  list(filter(None, sentence))
+    for _ in sentence: 
+        if _.isalpha() == True:
+            pass
+        else:
+            continue
+            
+        if _ in stop_ch or _ in stop_en:
+            continue
+        else:
+            try:
+                embeddings_index[_]
+                vocabulary.append(_)
+            except:
+                continue
+    
+    return ' '.join(vocabulary)
+
+def get_weight_matrix(embedding, vocab):
+    vocab_size = len(vocab) + 1
+    weight_matrix = zeros((vocab_size, 100))
+    for word, i in vocab.items():
+        weight_matrix[i] = embedding.get(word)
+
+    return weight_matrix
+
+
+
+
+x = df['sp_content']
+y = df['sc_name_hk']
+
+encoder = LabelEncoder()
+encoder.fit(y)
+encoded_Y = encoder.transform(y)
+
+x = x.apply(raw_to_clean)
+all_text = x.drop_duplicates(keep=False)
+tokenizer = Tokenizer(num_words = MAX_NB_WORDS+1)
+tokenizer.fit_on_texts(all_text)
+encoded_docs = tokenizer.texts_to_sequences(x)
+
+
+word_index = tokenizer.word_index
+nb_words = min(MAX_NB_WORDS, len(word_index) + 1)
+embedding_matrix = np.zeros((nb_words, EMBEDDING_DIM))
+
+for word, i in word_index.items():
+    if i >= nb_words:
+        continue
+    embedding_vector = embeddings_index.get(word)
+    if (embedding_vector is not None) and len(embedding_vector) > 0:
+        # words not found in embedding index will be all-zeros.
+        embedding_matrix[i] = embedding_vector
+    else:
+        words_not_found.append(word)
+
+
+vocab_size = len(tokenizer.word_index) + 1
+
+
+
+x = pad_sequences(encoded_docs, maxlen=MAX_SEQUENCE_LENGTH)
+y = np_utils.to_categorical(encoded_Y)
+
