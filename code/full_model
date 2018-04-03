@@ -1,0 +1,326 @@
+## initization
+
+import numpy as np
+import pandas as pd
+import gensim
+import re
+import jieba
+import string
+from nltk.corpus import stopwords
+from collections import Counter
+from sklearn.cross_validation import train_test_split
+from keras.preprocessing.text import Tokenizer
+from keras.preprocessing.sequence import pad_sequences
+from keras.layers import Flatten
+from keras.layers import MaxPooling1D
+from keras.models import Model
+from keras.models import Sequential
+from keras.layers import Embedding
+from keras.layers.convolutional import Conv1D
+from keras.layers.convolutional import MaxPooling1D
+from keras.layers import Dense
+from sklearn.preprocessing import LabelEncoder
+from keras.utils import np_utils
+from IPython.display import clear_output
+from gensim.models.wrappers import FastText
+from tqdm import tqdm
+import codecs
+from keras.layers import Dropout
+from keras.layers import Input
+from keras.layers import Activation
+from keras.layers import Add
+%matplotlib inline 
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import auc
+
+
+## Read File
+
+file_path = 'Desktop/big_big_category_c.csv'
+p_train_v = 'Desktop/wiki.zh_yue.vec'
+df = pd.read_csv(file_path)
+print(len(df))
+df = df.dropna()
+print(len(df))
+
+## Data Cleansing
+
+test_categ = ['食得好健康', '12瞞逃', 'big big明星市集', '降魔的番外篇', '新春推介', '関西攻略の新年番外篇', 
+              '萬千星輝頒獎典禮', '渣打香港馬拉松', '國際中華小姐競選', '新春辦年貨','遊戲','電競',
+             '大台寶藏','陳小姐','Do姐有問題','古巨基初心再體驗']
+
+df = df[~ df.sc_name_hk.isin(test_categ)]
+print(len(df))
+
+
+## Data Distribution
+
+distri = Counter(df['sc_name_hk']).most_common(1)[0][1]
+greed_ac = distri/len(df)
+print('greedy_accuracy:',greed_ac)
+for _ in Counter(df['sc_name_hk']).most_common():
+    print(_)
+
+## Two Word Embeding training -- custom layer
+
+class Embedding2(Layer):
+
+    def __init__(self, input_dim, output_dim, fixed_weights, embeddings_initializer='uniform', 
+                 input_length=None, **kwargs):
+        kwargs['dtype'] = 'int32'
+        if 'input_shape' not in kwargs:
+            if input_length:
+                kwargs['input_shape'] = (input_length,)
+            else:
+                kwargs['input_shape'] = (None,)
+        super(Embedding2, self).__init__(**kwargs)
+
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.embeddings_initializer = embeddings_initializer
+        self.fixed_weights = fixed_weights
+        self.num_trainable = input_dim - len(fixed_weights)
+        self.input_length = input_length
+
+    def build(self, input_shape, name='embeddings'):
+        initializer = initializers.get(self.embeddings_initializer)
+        shape1 = (self.num_trainable, self.output_dim)
+        variable_weight = K.variable(initializer(shape1), dtype=K.floatx(), name=name+'_var')
+
+        fixed_weight = K.variable(self.fixed_weights, name=name+'_fixed')
+
+
+        self._trainable_weights.append(variable_weight)
+        self._non_trainable_weights.append(fixed_weight)
+
+        self.embeddings = K.concatenate([fixed_weight, variable_weight], axis=0)
+
+        self.built = True
+
+    def call(self, inputs):
+        if K.dtype(inputs) != 'int32':
+            inputs = K.cast(inputs, 'int32')
+        out = K.gather(self.embeddings, inputs)
+        return out
+
+    def compute_output_shape(self, input_shape):
+        if not self.input_length:
+            input_length = input_shape[1]
+        else:
+            input_length = self.input_length
+        return (input_shape[0], input_length, self.output_dim)
+
+
+### word embedding preprocessing 
+
+embeddings_index = {}
+f = codecs.open('Desktop/wiki.zh_yue.vec', encoding='utf-8')
+for line in tqdm(f):
+    values = line.rstrip().rsplit(' ')
+    word = values[0]
+    coefs = np.asarray(values[1:], dtype='float32')
+    embeddings_index[word] = coefs
+f.close()
+
+MAX_NB_WORDS = 200000
+MAX_SEQUENCE_LENGTH = 142
+EMBEDDING_DIM = 300
+
+def raw_to_clean(df_):
+    seg_list = ''
+    vocabulary = []
+    stop_ch = set(stopwords.words('chinese'))
+    stop_en = set(stopwords.words('english'))
+   
+    sentence = jieba.lcut(df_, cut_all= True)
+    sentence =  list(filter(None, sentence))
+    for _ in sentence: 
+        if _.isalpha() == True:
+            pass
+        else:
+            continue
+            
+        if _ in stop_ch or _ in stop_en:
+            continue
+        else:
+            try:
+                embeddings_index[_]
+            except:
+                vocabulary.append(_)
+            else:
+                continue
+    
+    if len(vocabulary) == 0:
+        return 
+    else:
+        return ' '.join(vocabulary)
+
+def raw_to_oov(df_):
+    seg_list = ''
+    vocabulary = []
+    stop_ch = set(stopwords.words('chinese'))
+    stop_en = set(stopwords.words('english'))
+   
+    sentence = jieba.lcut(df_, cut_all= True)
+    sentence =  list(filter(None, sentence))
+    for _ in sentence: 
+        if _.isalpha() == True:
+            pass
+        else:
+            continue
+            
+        if _ in stop_ch or _ in stop_en:
+            continue
+        else:
+            try:
+                embeddings_index[_]
+                vocabulary.append(_)
+
+            except:
+                continue
+    return ' '.join(vocabulary)
+
+def raw_to_com(df_):
+    seg_list = ''
+    vocabulary = []
+    stop_ch = set(stopwords.words('chinese'))
+    stop_en = set(stopwords.words('english'))
+   
+    sentence = jieba.lcut(df_, cut_all= True)
+    sentence =  list(filter(None, sentence))
+    for _ in sentence: 
+        if _.isalpha() == True:
+            pass
+        else:
+            continue
+            
+        if _ in stop_ch or _ in stop_en:
+            continue
+        else:
+            vocabulary.append(_)
+
+            
+    return ' '.join(vocabulary)
+
+x = df['sp_content']
+y = df['sc_name_hk']
+words_not_found = []
+#encode category in y
+encoder = LabelEncoder()
+encoder.fit(y)
+encoded_Y = encoder.transform(y)
+#encode non-OOV word in x
+
+x_trained = x.apply(raw_to_clean)
+x_untrain = x.apply(raw_to_oov)
+
+x = x.apply(raw_to_com)
+all_text = x_untrain.drop_duplicates(keep=False)
+extra_text = x_trained.drop_duplicates(keep=False)
+
+tokenizer_2 = Tokenizer(num_words = MAX_NB_WORDS+1)
+tokenizer_2.fit_on_texts(extra_text)
+
+tokenizer = Tokenizer(num_words = MAX_NB_WORDS+1)
+tokenizer.fit_on_texts(all_text)
+
+word_index = tokenizer.word_index
+print(len(tokenizer.word_index))
+        
+counter = len(tokenizer.word_index)
+
+for _ in tokenizer_2.word_index:
+    try:
+        tokenizer.word_index[_]
+    except:
+        counter = counter + 1
+        tokenizer.word_index[_] = counter
+    else:
+        continue
+print(len(tokenizer.word_index))
+
+nb_words = min(MAX_NB_WORDS, counter)
+fixed_embedding_matrix = np.zeros((nb_words, EMBEDDING_DIM))
+
+for word, i in word_index.items():
+    if i >= nb_words:
+        continue
+    embedding_vector = embeddings_index.get(word)
+    if (embedding_vector is not None) and len(embedding_vector) > 0:
+        # words not found in embedding index will be all-zeros.
+        fixed_embedding_matrix[i] = embedding_vector
+    else:
+        words_not_found.append(word)
+    
+encoded_docs = tokenizer.texts_to_sequences(x)
+
+input_word = len(tokenizer.word_index)+1 
+x = pad_sequences(encoded_docs, maxlen=MAX_SEQUENCE_LENGTH)
+y = np_utils.to_categorical(encoded_Y)
+
+
+
+
+### model building with two embedding layers
+
+k = 1
+for _ in range(0,1):
+    for a in range(1):
+        xtrain, xtest, ytrain, ytest = train_test_split(x, y, test_size=0.3)
+        
+        #50 vector
+        model = Sequential([
+            Embedding2(input_dim = input_word , output_dim = EMBEDDING_DIM, fixed_weights = fixed_embedding_matrix, input_length = MAX_SEQUENCE_LENGTH),
+            Conv1D(filters=128, kernel_size = 5, activation='relu'),
+            MaxPooling1D(pool_size=2),
+            Flatten(),
+            Dropout(0.5),
+            Dense(30, activation='relu'),
+            Dropout(0.5),
+            Dense(10, activation='relu'),
+            Dense(12, activation='softmax')
+            
+            
+        ])
+        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
+        model.fit(xtrain,ytrain,epochs = 20 ,verbose=2 ,validation_data=(xtest, ytest))
+
+
+
+### Evaluation of the model with AUC
+
+y_hats = model.predict_proba(xtest)
+chine = matplotlib.font_manager.FontProperties(fname='Desktop/SimHei.ttf')
+cutoffs = np.arange(0, 10) / 10
+
+Recalls = []
+False_alarms = []
+for cat in np.arange(12):
+    recalls = []
+    false_alarms = []
+    for cutoff in cutoffs:
+        y_hat = [_[cat] > cutoff for _ in y_hats]
+        _y = [int(_[cat]) for _ in ytest]
+        tp ,fp,fn,tp = confusion_matrix(y_hat, _y).ravel()
+        recall = tp / (tp + fn)
+        false_alarm = fp / (fn + fp)
+
+        recalls.append(recall)
+        false_alarms.append(false_alarm)
+    Recalls.append(recalls)
+    False_alarms.append(false_alarms)
+
+plt.figure(figsize=(10,10))
+for recalls, false_alarms, i in zip(Recalls, False_alarms, np.arange(len(Recalls))): 
+    recalls, false_alarms = zip(*sorted(list(zip(recalls, false_alarms)), key=lambda _: _[1]))
+    plt.plot(false_alarms, recalls, '--', label=encoder.classes_[i])
+plt.plot([0,1], [0,1], label='lazy')
+plt.legend(prop=chine)
+# plt.setp(family)
+plt.grid()
+# plt.show(fontproperties=chine)
+
+
+
+
